@@ -1,0 +1,12 @@
+{
+  "database": {
+    "jdbcUrl": "jdbc:postgresql://localhost:5432/google-tts-hassio",
+    "username": "postgres",
+    "password": "password",
+    "maximumPoolSize": 32
+  },
+  "googleTextToSpeech": {
+    "name": "en-AU-Wavenet-A",
+    "languageCode": "en-au"
+  }
+}

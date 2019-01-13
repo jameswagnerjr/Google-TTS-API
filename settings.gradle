@@ -1,0 +1,7 @@
+rootProject.name = 'google-tts-hassio'
+
+include 'google-tts-hassio.config'
+project(':google-tts-hassio.config').projectDir = new File("$rootDir/modules/google-tts-hassio.config")
+
+include 'google-tts-hassio.hassio-api'
+project(':google-tts-hassio.hassio-api').projectDir = new File("$rootDir/modules/google-tts-hassio.hassio-api")

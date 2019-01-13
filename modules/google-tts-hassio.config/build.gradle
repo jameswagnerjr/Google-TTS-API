@@ -1,0 +1,15 @@
+plugins {
+    id 'java'
+}
+
+group 'com.legacyre'
+version '{VersionString}'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+}

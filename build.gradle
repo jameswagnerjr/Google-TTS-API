@@ -1,0 +1,311 @@
+import com.github.jk1.license.render.InventoryHtmlReportRenderer
+import com.github.jk1.license.render.SimpleHtmlReportRenderer
+import com.github.jk1.license.render.TextReportRenderer
+import com.github.jk1.license.filter.LicenseBundleNormalizer
+
+plugins {
+    id 'java'
+    id "net.ltgt.apt-idea" version "0.15"
+    id 'com.github.johnrengelman.shadow' version '2.0.2'
+    id 'idea'
+    id 'checkstyle'
+    id 'jacoco'
+    id "com.github.jk1.dependency-license-report" version "1.2"
+    id 'nu.studer.jooq' version '3.0.2'
+
+}
+
+apply plugin: 'idea'
+
+shadowJar {
+    classifier = 'fat'
+}
+
+
+group 'net.wagnerjr.james'
+version '1.0-SNAPSHOT'
+
+sourceCompatibility = 1.8
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'idea'
+    apply plugin: 'com.github.johnrengelman.shadow'
+    //apply plugin: 'net.ltgt.errorprone'
+    apply plugin: "checkstyle"
+    sourceCompatibility = 1.8
+    targetCompatibility = 1.8
+
+    shadowJar {
+        classifier = 'fat'
+    }
+
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        maven {
+            url 'https://dl.bintray.com/fnproject/fnproject'
+        }
+    }
+
+    configurations.all {
+    }
+
+    checkstyle {
+        toolVersion = "8.10.1"
+        configFile = rootProject.file('config/checkstyle/checkstyle.xml')
+        configProperties = [
+                'checkstyle.cache.file': "${buildDir}/checkstyle.cache",
+        ]
+        ignoreFailures = true
+        showViolations = true
+    }
+
+    task buildZip(type: Zip) {
+        // Using the Zip API from gradle to build a zip file of all the dependencies
+        //
+        // The path to this zip file can be set in the serverless.yml file for the
+        // package/artifact setting for deployment to the S3 bucket
+        //
+        // Link: https://docs.gradle.org/current/dsl/org.gradle.api.tasks.bundling.Zip.html
+
+        // set the base name of the zip file
+        baseName = project.name
+        from shadowJar
+    }
+
+    build.dependsOn buildZip
+}
+
+task testReport(type: TestReport) {
+    destinationDir = file("$buildDir/reports/allTests")
+    // Include the results from the `test` task in all subprojects
+    reportOn subprojects*.test.binResultsDir
+}
+
+allprojects {
+    apply plugin: 'idea'
+    apply plugin: 'maven'
+    apply plugin: 'net.ltgt.apt-idea'
+    apply plugin: 'jacoco'
+    apply plugin: 'nu.studer.jooq'
+
+
+    group = 'com.legacyre'
+    version = '{VersionString}'
+
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        maven {
+            url 'https://dl.bintray.com/fnproject/fnproject'
+        }
+        jcenter()
+    }
+
+    dependencies {
+        testImplementation 'org.junit.jupiter:junit-jupiter-api:5.1.0'
+        testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.1.0'
+        testCompile 'org.junit.jupiter:junit-jupiter-params:5.0.2'
+
+        compile 'com.squareup.okhttp3:okhttp:3.10.0'
+        compile 'org.slf4j:slf4j-simple:1.7.25'
+        compile group: 'com.squareup.moshi', name: 'moshi', version: '1.6.0'
+        compile group: 'com.github.javafaker', name: 'javafaker', version: '0.15'
+
+        compile 'com.sparkjava:spark-core:2.7.2'
+
+        compile 'com.google.cloud:google-cloud-texttospeech:0.70.0-beta'
+        compile 'net.sourceforge.argparse4j:argparse4j:0.8.1'
+        
+        compile group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.11.1'
+
+        // Database stuff
+        compile 'org.jooq:jooq'
+        compile 'com.zaxxer:HikariCP:3.2.0'
+        compile 'org.postgresql:postgresql:42.2.5'
+
+        jooqRuntime 'org.postgresql:postgresql:42.2.5'
+
+        // Optional needed if you wanted to use @MapHide, @MapElementName or @MapAdapter
+        compile group: 'com.raybritton.autovaluemap', name: 'annotations', version: '2.3.6'
+
+        // AutoValue stuff
+        compileOnly "com.google.auto.value:auto-value:1.5.4"
+        annotationProcessor "com.google.auto.value:auto-value:1.5.4"
+        annotationProcessor 'com.ryanharter.auto.value:auto-value-moshi:0.4.5'
+        compileOnly 'com.ryanharter.auto.value:auto-value-moshi-annotations:0.4.5'
+        annotationProcessor 'com.squareup.auto.value:auto-value-redacted:1.0.1'
+        annotationProcessor 'com.gabrielittner.auto.value:auto-value-with:1.0.0'
+        compile 'com.serjltt.moshi:moshi-lazy-adapters:2.2'
+        annotationProcessor group: 'com.raybritton.autovaluemap', name: 'auto-value-map', version: '2.3.6'
+        compile group: 'com.raybritton.autovaluemap', name: 'auto-value-map', version: '2.3.6'
+    }
+
+    test {
+        useJUnitPlatform()
+        finalizedBy(testReport)
+        jacoco {
+            excludes += ["**.*AutoValue*",'**.*AutoOneOf*']
+        }
+    }
+
+    jacocoTestReport {
+        group = "Reporting"
+        additionalSourceDirs = files(sourceSets.main.allSource.srcDirs)
+        sourceDirectories = files(sourceSets.main.allSource.srcDirs)
+        classDirectories =  files(sourceSets.main.output)
+        reports {
+            xml.enabled true
+            csv.enabled false
+            html.enabled true
+            html.destination file("${buildDir}/reports/jacoco")
+        }
+        afterEvaluate {
+            classDirectories = files(classDirectories.files.collect {
+                fileTree(dir: it,
+                        exclude: ['**/*AutoValue*', '**/*AutoOneOf*'])
+            })
+        }
+        dependsOn(test)
+    }
+
+    jooq {
+        version = '3.11.2'
+        edition = 'OSS'
+        jobboards(sourceSets.main) {
+            jdbc {
+                driver = 'org.postgresql.Driver'
+                url = 'jdbc:postgresql://localhost:5432/google-tts-hassio'
+                user = 'postgres'
+                password = 'password'
+            }
+            generator {
+                name = 'org.jooq.codegen.DefaultGenerator'
+                strategy {
+                    name = 'org.jooq.codegen.DefaultGeneratorStrategy'
+                }
+                database {
+                    name = 'org.jooq.meta.postgres.PostgresDatabase'
+                    inputSchema = 'public'
+                    forcedTypes {
+                        forcedType {
+                            name = 'varchar'
+                            expression = '.*'
+                            types = 'JSONB?'
+                        }
+                        forcedType {
+                            name = 'varchar'
+                            expression = '.*'
+                            types = 'INET'
+                        }
+                    }
+                }
+                generate {
+                    relations = true
+                    deprecated = false
+                    records = true
+                    immutablePojos = true
+                    fluentSetters = true
+                    javaTimeTypes = true
+                }
+                target {
+                    packageName = 'net.wagnerjr.jooq'
+                }
+            }
+        }
+    }
+}
+
+task jacocoRootReport(type: JacocoReport, group: 'Reporting') {
+    description = 'Generates an aggregate report from all subprojects'
+    dependsOn(allprojects.jacocoTestReport)
+
+    additionalSourceDirs = files(subprojects.sourceSets.main.allSource.srcDirs)
+    sourceDirectories = files(subprojects.sourceSets.main.allSource.srcDirs)
+    classDirectories = files(subprojects.sourceSets.main.output)
+    executionData = files(subprojects.jacocoTestReport.executionData)
+
+    reports {
+        html.enabled true
+        html.destination file("${rootDir}/build/reports/jacoco")
+        xml.enabled true
+        xml.destination file("${rootDir}/build/reports/jacoco/jacocoRootReport.xml")
+        csv.enabled false
+    }
+    afterEvaluate {
+        classDirectories = files(classDirectories.files.collect {
+            fileTree(dir: it,
+                    exclude: ['**/*AutoValue*', '**/*AutoOneOf*'])
+        })
+    }
+
+    doFirst {
+        executionData = files(executionData.findAll { it.exists() })
+    }
+}
+
+
+task copyJars(type: Copy) {
+    from subprojects.collect { it.tasks.findByName("buildZip") }
+    into "$buildDir/allDistribution"
+}
+
+build.finalizedBy(copyJars)
+
+task checkAllStyles(group: 'verification', description: 'Check both Test and Main class\'s styles') {
+    dependsOn = [subprojects*.checkstyleMain, subprojects*.checkstyleTest]
+    doLast {
+        def reportFiles = fileTree(rootDir).include('**/checkstyle/main.xml', '**/checkstyle/test.xml')
+        def reportDir = new File("${project.buildDir}/reports/checkstyle")
+        if (!reportDir.exists()) {
+            reportDir.mkdirs()
+        }
+        def file = new File("${reportDir}/aggregate.xml")
+        def fileElemWriter = new PrintWriter(file)
+        fileElemWriter.print('<checkstyle version="5.6">')
+        def fileElemXml = new XmlNodePrinter(fileElemWriter)
+        reportFiles.each { reportFile ->
+            new XmlParser().parse(reportFile).file.each { fileElemXml.print(it) }
+        }
+        fileElemWriter.print('</checkstyle>')
+        fileElemWriter.flush()
+        ant.xslt(in: file, style: "config/checkstyle/checkstyle.xsl", out: "${reportDir}/checkstyle.html")
+    }
+}
+
+task aggregatedJavadocs(type: Javadoc, description: 'Generate javadocs from all child projects as if it was a single project', group: 'Documentation') {
+    destinationDir = file("$buildDir/docs/javadoc")
+    title = "$project.name $version JavaDocs"
+    options.addStringOption("sourcepath", "")
+    options.author true
+    options.links 'http://docs.spring.io/spring/docs/4.3.x/javadoc-api/', 'http://docs.oracle.com/javase/8/docs/api/', 'http://docs.spring.io/spring-ws/docs/2.3.0.RELEASE/api/', 'http://docs.spring.io/spring-security/site/docs/4.0.4.RELEASE/apidocs/'
+    options.addStringOption 'Xdoclint:none', '-quiet'
+
+    subprojects.each { proj ->
+        proj.tasks.withType(Javadoc).each { javadocTask ->
+            source += javadocTask.source
+            classpath += javadocTask.classpath
+            excludes += javadocTask.excludes
+            includes += javadocTask.includes
+        }
+    }
+}
+
+licenseReport {
+    projects = [project] + project.subprojects
+    filters = new LicenseBundleNormalizer()
+    renderers = [new InventoryHtmlReportRenderer('report.html','Backend'), new SimpleHtmlReportRenderer(), new TextReportRenderer()]
+}
+
+task cacheDeps(type: Exec) {
+    configurations.testRuntime.files
+    commandLine 'echo', 'Downloaded all dependencies'
+}
+
+task copyDeps(type: Copy) {
+    from configurations.compile
+    into "${project.buildDir}/deps"
+}
+
+build.dependsOn copyDeps
