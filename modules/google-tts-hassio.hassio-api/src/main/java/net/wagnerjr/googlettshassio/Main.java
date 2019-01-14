@@ -13,12 +13,15 @@ import java.io.File;
 
 import static spark.Spark.after;
 import static spark.Spark.get;
+import static spark.Spark.port;
 import static spark.Spark.post;
 
 public class Main {
     public static void main(String[] args) {
         ConfigHandler.getConfig(new File("./config.json"));
         DataSource dataSource = ConfigHandler.getConfiguration().getDatabaseConfiguration().getDataSource();
+
+        port(80);
 
         after((request, response) -> {
             response.header("Content-Encoding", "gzip");
@@ -37,16 +40,16 @@ public class Main {
                   .post(body)
                   .build();
 
-            client.newCall(respondingRequest).execute();
+            client.newCall(respondingRequest).execute().close();
 
             return "{\"status\": \"success\"}";
         });
 
-        get("/mp3/:id", (request, response) -> {
-            Integer id = Integer.valueOf(request.params("id"));
+        get("/mp3/play.mp3", (request, response) -> {
+            Integer id = Integer.valueOf(request.queryParams("id"));
             System.out.println(id);
             TextToSpeechRequest tts = TextToSpeechRequest.getFromDataBase(id, dataSource);
-            response.type("audio/mpeg");
+            response.type("audio/mp3");
 
             HttpServletResponse raw = response.raw();
 
